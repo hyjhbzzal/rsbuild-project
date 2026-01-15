@@ -1,0 +1,87 @@
+name: PR Quality & Security Checker
+
+on:
+  pull_request:
+    types: [ opened, edited, synchronize ]
+
+jobs:
+  check-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read # 读取文件列表需要此权限
+
+    steps:
+      - name: Validate PR Content and Files
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const { owner, repo } = context.repo;
+            
+            // 包含目录前缀或完整文件名
+            const restrictedPaths = ['.github/', 'CHANGELOG.md'];
+
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner,
+              repo,
+              pull_number: pr.number,
+            });
+
+            const modifiedRestrictedFiles = files
+              .map(f => f.filename)
+              .filter(path => restrictedPaths.some(p => path.startsWith(p)));
+
+            if (modifiedRestrictedFiles.length > 0) {
+              console.log(`Restricted files modified: ${modifiedRestrictedFiles.join(', ')}`);
+            
+              const rejectMessage = `
+              ❌ **PR 已自动关闭**
+            
+              你好 @${pr.user.login}，检测到此 PR 修改了受保护的文件或目录：
+              \`${modifiedRestrictedFiles.join(', ')}\`
+            
+              **说明：**
+              为了确保项目安全和流程统一，\`${restrictedPaths.join(' 和 ')}\` 下的内容仅限内部维护者修改，不接受社区贡献。
+            
+              如果你认为这是一个必要的改动，请先在 Issue 中与维护者沟通。谢谢配合！
+              `;
+
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: pr.number,
+                body: rejectMessage
+              });
+
+              await github.rest.pulls.update({
+                owner,
+                repo,
+                pull_number: pr.number,
+                state: 'closed'
+              });
+            
+              return; // 直接退出，不再进行后续校验
+            }
+
+            let errors = [];
+            const body = pr.body || "";
+            
+            if (body.length < 30) {
+              errors.push("📝 **描述过短**：请详细说明修改内容（至少 30 个字符）。");
+            }
+
+            if (errors.length > 0) {
+              const commentBody = `
+              👋 @${pr.user.login}，感谢提交！在合并前请协助完善：
+            
+              ${errors.map(err => `- ${err}`).join('\n')}
+              `;
+
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: pr.number,
+                body: commentBody
+              });
+            }
