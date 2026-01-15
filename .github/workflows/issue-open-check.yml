@@ -17,7 +17,55 @@ jobs:
           script: |
             const issue = context.payload.issue;
             const body = issue.body;
+            const title = issue.title.toLowerCase(); // 转小写以便不区分大小写
             const isTooShort = !body || body.length < 20;
+            
+            const webKeywords = ['官网', '网站', ,'国内', '镜像'];
+            const actionKeywords = ['挂了','挂掉了','无法访问','不能访问','访问速度','访问慢','访问不了','加载太慢','加载慢','加载很慢','出问题','打不开','登不上'];
+            const hasForbiddenKeyword = webKeywords.some(keyword => title.includes(keyword))&&actionKeywords.some(keyword => title.includes(keyword));
+            
+            async function closeIssue(reasonComment) {
+              console.log("Closing issue...");
+            
+              try {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  labels: ['invalid'] 
+                });
+              } catch (e) { console.log("Label error (ignore if label missing)"); }
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: reasonComment
+              });
+
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: 'closed'
+              });
+            }
+            
+            if (hasForbiddenKeyword) {
+              const reply = `
+              你好 @${issue.user.login}，
+            
+              检测到你的 Issue 标题包含 **不支持的关键词** (如：官网、网站状态、IE 浏览器等)，因此已被自动关闭。
+            
+              **说明：**
+              1. **官网/网站问题**：GitHub Issues 仅用于代码库的 Bug 反馈，官网服务状态请联系客服或查看状态页。
+              2. **IE 兼容性**：本项目已不再支持 Internet Explorer (IE) 浏览器，请升级 Edge 或使用 Chrome/Firefox。
+            
+              如果是误判，请修改标题并重新开启 Issue。
+              `;
+              await closeIssue(reply);
+              return;
+            }
             
             if (isTooShort) {
               try {
