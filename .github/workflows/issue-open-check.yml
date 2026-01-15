@@ -1,0 +1,60 @@
+name: issue-open-check
+
+on:
+  issues:
+    types: [ opened ] # 当 issue 被创建时触发
+
+jobs:
+  issue-open-check:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write # 需要写入权限来关闭 issue 和评论
+
+    steps:
+      - name: Check Issue Body
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const body = issue.body;
+            const isTooShort = !body || body.length < 20;
+            
+            if (isTooShort) {
+              try {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  labels: ['invalid']
+                });
+              } catch (e) {
+                console.log("Could not add label, maybe it doesn't exist yet?");
+              }
+
+              const commentBody = `
+              你好 @${issue.user.login}，
+            
+              检测到你的 Issue **不符合规范**，因此已被自动关闭。
+            
+              **可能的原因：**
+              1. 描述过于简单或字数太少。
+            
+              请修改你的 Issue 描述，补充详细的复现步骤、环境信息或日志。修改并符合规范后，你可以重新开启此 Issue (Reopen)。
+            
+              > 这是一个自动回复，如有误判请谅解。
+              `;
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: commentBody
+              });
+
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: 'closed'
+              });
+            }
