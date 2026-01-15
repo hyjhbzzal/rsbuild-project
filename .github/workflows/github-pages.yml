@@ -34,11 +34,13 @@ jobs:
           cache: 'pnpm'
           cache-dependency-path: '**/pnpm-lock.yaml'
 
-      - name: Install dependencies (安装依赖)
+      - name: Install pnpm (安装pnpm)
         uses: pnpm/action-setup@v2
         with:
           version: latest
-          run_install: true
+
+      - name: Install dependencies (安装依赖)
+        run: pnpm install --frozen-lockfile
 
       - name: lint (代码检查)
         run: pnpm run lint
