@@ -20,7 +20,7 @@ jobs:
             const author = issue.user.login;
             const responses = {
               'help wanted': `
-              👋 @${author} 感谢提交！
+              👋 @${author} 感谢提交！!
             
               维护者已将此 Issue 标记为 **help wanted**。这意味着我们非常欢迎社区贡献代码来修复或实现它。
             
