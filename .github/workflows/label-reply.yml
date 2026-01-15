@@ -1,0 +1,62 @@
+name: Label Auto Response
+
+on:
+  issues:
+    types: [ labeled ] # 仅在 Issue 被添加标签时触发
+
+jobs:
+  label-reply:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write # 必须有写入权限才能发评论
+
+    steps:
+      - name: Reply based on label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const label = context.payload.label.name;
+            const issue = context.payload.issue;
+            const author = issue.user.login;
+            const responses = {
+              'help wanted': `
+              👋 @${author} 感谢提交！
+            
+              维护者已将此 Issue 标记为 **help wanted**。这意味着我们非常欢迎社区贡献代码来修复或实现它。
+            
+              - 如果你想接手，请回复 "I will take this" 告知我们。
+              - 提交 PR 前，请务必阅读项目的 [贡献指南](CONTRIBUTING.md)。
+              `,
+
+              'enhancement': `
+              ✨ 这是一个功能改进建议 (**enhancement**)。
+            
+              我们会根据优先级进行排期。如果你喜欢这个功能，请给 Issue 描述点个 👍 (Reaction)。
+              如果有更详细的设计思路或使用场景，欢迎在评论区补充，这将有助于我们更快推进。
+              `,
+
+              'needs info': `
+              🤔 **需要更多信息**
+            
+              你好 @${author}，我们需要你提供更多的上下文（如：日志、截图、版本号）才能继续排查。
+              请更新 Issue 描述，收到回复后我们会重新评估。
+              `
+            };
+
+            // 检查本次添加的标签是否有预设的回复
+            if (responses[label]) {
+              console.log(`Label "${label}" detected, adding comment...`);
+            
+              try {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: responses[label]
+                });
+              } catch (error) {
+                console.error("Failed to add comment:", error);
+              }
+            } else {
+              console.log(`No action defined for label: "${label}"`);
+            }

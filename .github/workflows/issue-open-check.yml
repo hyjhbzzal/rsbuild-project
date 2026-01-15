@@ -1,4 +1,4 @@
-name: issue-open-check
+name: Issue Quality Checker
 
 on:
   issues:
