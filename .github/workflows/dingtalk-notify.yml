@@ -1,18 +1,50 @@
-name: DingTalk Issue Notification
+name: DingTalk Custom Notify
 
 on:
   issues:
     types: [ opened ]
 
 jobs:
-  notify:
+  dingtalk:
     runs-on: ubuntu-latest
     steps:
-      - name: Send DingTalk Notification
-        uses: visiky/dingtalk-release-notify@main
+      - name: Notify
+        uses: actions/github-script@v7
+        env:
+          DING_WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK }}
+          DING_SECRET: ${{ secrets.DINGTALK_SECRET }}
         with:
-          DING_TALK_TOKEN: ${{ secrets.DINGTALK_ACCESS_TOKEN }}
-          notify_title: '🔥 @${{ github.event.issue.user.login }} 创建了 issue：${{ github.event.issue.title }}'
-          notify_body: '### 🔥 @${{ github.event.issue.user.login }} 创建了 issue：[${{ github.event.issue.title }}](${{ github.event.issue.html_url }}) <hr /> ![立即前往处理此 Issue](${{ github.event.issue.html_url }})'
-          notify_footer: '> 💬 欢迎前往 GitHub 进行讨论，社区可能需要你的帮助。'
-          at_all: false # whether to ding everybody
+          script: |
+            const crypto = require('crypto');
+            
+            const secret = process.env.DING_SECRET;
+            const timestamp = Date.now();
+            const stringToSign = timestamp + "\n" + secret;
+            const sign = crypto.createHmac('sha256', secret).update(stringToSign).digest('base64');
+            const url = `${process.env.DING_WEBHOOK}&timestamp=${timestamp}&sign=${encodeURIComponent(sign)}`;
+
+            const issue = context.payload.issue;
+            const data = {
+              msgtype: "markdown",
+              markdown: {
+                title: "新 Issue 通知",
+                text: `### 🔔 新 Issue 提醒\n` +
+                      `> **标题**: ${issue.title}\n\n` +
+                      `> **作者**: ${issue.user.login}\n\n` +
+                      `> **详情**: [点击查看 Issue](${issue.html_url})`
+              },
+              at: {
+                isAtAll: false
+              }
+            };
+
+            const res = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(data)
+            });
+
+            if (!res.ok) {
+              console.log(await res.text());
+              throw new Error('钉钉发送失败');
+            }
